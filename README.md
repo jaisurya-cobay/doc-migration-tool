@@ -47,6 +47,16 @@ set GEMINI_API_KEY=AIza...
 
 ## Usage
 
+### Web UI (Recommended)
+
+```bash
+python app.py
+```
+
+Open **http://127.0.0.1:5000** in your browser. Upload a file, enter your API key, and click Analyse.
+
+### CLI
+
 ```bash
 # Analyse a single PDF
 python main.py report.pdf
@@ -180,9 +190,12 @@ Two files are written per document into the output directory:
 
 ```
 doc-migration-tool/
+|-- app.py               # Flask web UI
 |-- main.py              # CLI entry point
 |-- requirements.txt     # Python dependencies
 |-- README.md
+|-- templates/
+|   |-- index.html       # Web interface
 |-- src/
     |-- __init__.py
     |-- parsers.py       # .docx and .pdf document parsing

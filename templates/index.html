@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Migration Readiness Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 24px 0;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .header p {
+            color: #94a3b8;
+            margin-top: 6px;
+            font-size: 15px;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        /* Upload Card */
+        .upload-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #475569;
+            border-radius: 10px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #0f172a;
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: #3b82f6;
+            background: #1e3a5f;
+        }
+
+        .drop-zone .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .drop-zone h3 {
+            color: #e2e8f0;
+            font-size: 18px;
+            margin-bottom: 6px;
+        }
+
+        .drop-zone p {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .file-name {
+            margin-top: 12px;
+            color: #3b82f6;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .api-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            align-items: end;
+        }
+
+        .field {
+            flex: 1;
+        }
+
+        .field label {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .field input:focus {
+            border-color: #3b82f6;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .checkbox-row label {
+            font-size: 14px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+        .btn-download {
+            background: #059669;
+            color: white;
+            padding: 8px 20px;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+
+        .btn-download:hover { background: #047857; }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 48px;
+            display: none;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #334155;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading p {
+            color: #94a3b8;
+            font-size: 15px;
+        }
+
+        /* Results */
+        .results {
+            display: none;
+        }
+
+        .result-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .result-card h2 {
+            font-size: 20px;
+            color: #f1f5f9;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #334155;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .metric-item {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .metric-item .label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-item .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-top: 4px;
+        }
+
+        /* Score Badges */
+        .scores-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .score-badge {
+            flex: 1;
+            min-width: 180px;
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .score-badge .number {
+            font-size: 36px;
+            font-weight: 800;
+        }
+
+        .score-badge .out-of {
+            font-size: 16px;
+            color: #64748b;
+        }
+
+        .score-badge .label {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .score-badge .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .tag-green  { background: #064e3b; color: #34d399; }
+        .tag-yellow { background: #713f12; color: #fbbf24; }
+        .tag-red    { background: #7f1d1d; color: #f87171; }
+        .tag-blue   { background: #1e3a5f; color: #60a5fa; }
+
+        /* Lists */
+        .ai-section {
+            margin-top: 16px;
+        }
+
+        .ai-section h3 {
+            font-size: 15px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ai-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .ai-section li {
+            padding: 8px 12px;
+            background: #0f172a;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .ai-section li.strength { border-left: 3px solid #34d399; }
+        .ai-section li.issue    { border-left: 3px solid #f87171; }
+        .ai-section li.suggest  { border-left: 3px solid #60a5fa; }
+
+        .summary-text {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .clarity-text {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #94a3b8;
+            margin-bottom: 16px;
+        }
+
+        .error-msg {
+            background: #7f1d1d;
+            color: #fca5a5;
+            padding: 14px 20px;
+            border-radius: 8px;
+            margin-top: 16px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Document Migration Readiness Tool</h1>
+    <p>Upload a .docx or .pdf file to analyse its migration readiness</p>
+</div>
+
+<div class="container">
+    <!-- Upload -->
+    <div class="upload-card" id="uploadCard">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="icon">&#128196;</div>
+            <h3>Drag & drop your file here</h3>
+            <p>or click to browse (.pdf, .docx)</p>
+            <div class="file-name" id="fileName"></div>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+
+        <div class="api-row">
+            <div class="field">
+                <label>Gemini API Key</label>
+                <input type="password" id="apiKey" placeholder="AIza... (optional if set in env)">
+            </div>
+        </div>
+
+        <div class="checkbox-row">
+            <input type="checkbox" id="skipAi">
+            <label for="skipAi">Skip AI analysis (metrics only)</label>
+        </div>
+
+        <button class="btn btn-primary" id="analyzeBtn" disabled onclick="analyzeFile()">
+            Analyse Document
+        </button>
+
+        <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Analysing document with Google Gemini AI...</p>
+        <p style="font-size: 13px; color: #475569; margin-top: 8px;">This may take 10-30 seconds</p>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="results">
+
+        <!-- Metrics -->
+        <div class="result-card">
+            <h2>Document Metrics</h2>
+            <div class="metrics-grid" id="metricsGrid"></div>
+        </div>
+
+        <!-- AI Analysis -->
+        <div class="result-card" id="aiCard" style="display:none">
+            <h2>AI Analysis</h2>
+
+            <div class="scores-row" id="scoresRow"></div>
+
+            <div class="clarity-text" id="clarityText"></div>
+
+            <div class="ai-section" id="strengthsSection"></div>
+            <div class="ai-section" id="issuesSection"></div>
+            <div class="ai-section" id="suggestionsSection"></div>
+
+            <div class="ai-section">
+                <h3>Summary</h3>
+                <div class="summary-text" id="summaryText"></div>
+            </div>
+        </div>
+
+        <!-- Download -->
+        <div class="result-card" style="text-align: center;">
+            <button class="btn btn-download" onclick="downloadJSON()">Download JSON Report</button>
+            <button class="btn btn-primary" style="background:#475569; margin-top:12px;" onclick="resetForm()">Analyse Another Document</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedFile = null;
+let lastResult = null;
+
+// Drag & drop
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+['dragenter', 'dragover'].forEach(e => {
+    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); });
+});
+['dragleave', 'drop'].forEach(e => {
+    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); });
+});
+dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (file) selectFile(file);
+});
+fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) selectFile(fileInput.files[0]);
+});
+
+function selectFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'docx'].includes(ext)) {
+        showError('Only .pdf and .docx files are supported.');
+        return;
+    }
+    selectedFile = file;
+    document.getElementById('fileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    document.getElementById('analyzeBtn').disabled = false;
+    hideError();
+}
+
+function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+function hideError() {
+    document.getElementById('errorMsg').style.display = 'none';
+}
+
+async function analyzeFile() {
+    if (!selectedFile) return;
+
+    hideError();
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('api_key', document.getElementById('apiKey').value);
+    formData.append('skip_ai', document.getElementById('skipAi').checked ? 'true' : 'false');
+
+    try {
+        const resp = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (data.error) {
+            showError(data.error);
+            document.getElementById('uploadCard').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+
+        lastResult = data;
+        renderResults(data);
+    } catch (err) {
+        showError('Request failed: ' + err.message);
+        document.getElementById('uploadCard').style.display = 'block';
+    }
+    document.getElementById('loading').style.display = 'none';
+}
+
+function renderResults(data) {
+    const m = data.metrics;
+
+    // Metrics grid
+    const metricsMap = [
+        ['File Type', m.file_type.toUpperCase()],
+        ['Pages', m.page_count + (m.is_page_count_estimated ? ' (est.)' : '')],
+        ['Words', m.word_count.toLocaleString()],
+        ['Characters', m.char_count.toLocaleString()],
+        ['Sentences', m.sentence_count],
+        ['Paragraphs', m.paragraph_count],
+        ['Headings', m.heading_count],
+        ['Avg Words/Para', m.avg_words_per_paragraph],
+        ['Vocabulary Richness', m.vocabulary_richness],
+        ['Tables', m.table_count],
+        ['Images', m.image_count],
+        ['Reading Time', m.estimated_reading_time_min + ' min'],
+    ];
+
+    document.getElementById('metricsGrid').innerHTML = metricsMap.map(([label, value]) =>
+        `<div class="metric-item"><div class="label">${label}</div><div class="value">${value}</div></div>`
+    ).join('');
+
+    // AI Analysis
+    const ai = data.ai_analysis;
+    const aiCard = document.getElementById('aiCard');
+
+    if (ai && !ai.error) {
+        aiCard.style.display = 'block';
+
+        // Scores
+        function tagClass(score) { return score >= 7 ? 'tag-green' : score >= 4 ? 'tag-yellow' : 'tag-red'; }
+        function qualityTag(val) {
+            if (['Ready', 'Well-Organized', 'Easy', 'Low'].includes(val)) return 'tag-green';
+            if (['Fragmented', 'Complex', 'Requires Restructuring', 'High'].includes(val)) return 'tag-red';
+            return 'tag-yellow';
+        }
+
+        document.getElementById('scoresRow').innerHTML = `
+            <div class="score-badge">
+                <div class="number" style="color:${ai.readability_score >= 7 ? '#34d399' : ai.readability_score >= 4 ? '#fbbf24' : '#f87171'}">${ai.readability_score}<span class="out-of">/10</span></div>
+                <div class="label">Readability</div>
+                <span class="tag ${qualityTag(ai.readability_level)}">${ai.readability_level}</span>
+            </div>
+            <div class="score-badge">
+                <div class="number" style="color:${ai.migration_score >= 7 ? '#34d399' : ai.migration_score >= 4 ? '#fbbf24' : '#f87171'}">${ai.migration_score}<span class="out-of">/10</span></div>
+                <div class="label">Migration Readiness</div>
+                <span class="tag ${qualityTag(ai.migration_readiness)}">${ai.migration_readiness}</span>
+            </div>
+            <div class="score-badge">
+                <div class="label" style="margin-bottom:8px">Structure</div>
+                <span class="tag ${qualityTag(ai.structural_quality)}" style="font-size:14px;padding:6px 16px">${ai.structural_quality}</span>
+                <div class="label" style="margin-top:12px">Effort</div>
+                <span class="tag ${qualityTag(ai.estimated_migration_effort)}" style="font-size:14px;padding:6px 16px;margin-top:6px">${ai.estimated_migration_effort}</span>
+            </div>
+        `;
+
+        document.getElementById('clarityText').textContent = ai.content_clarity;
+
+        renderList('strengthsSection', 'Strengths', ai.strengths, 'strength');
+        renderList('issuesSection', 'Issues Found', ai.issues, 'issue');
+        renderList('suggestionsSection', 'Suggestions', ai.suggestions, 'suggest');
+
+        document.getElementById('summaryText').textContent = ai.summary;
+    } else {
+        aiCard.style.display = 'none';
+    }
+
+    document.getElementById('results').style.display = 'block';
+}
+
+function renderList(containerId, title, items, cls) {
+    const el = document.getElementById(containerId);
+    if (!items || items.length === 0) { el.innerHTML = ''; return; }
+    el.innerHTML = `<h3>${title}</h3><ul>${items.map(i => `<li class="${cls}">${i}</li>`).join('')}</ul>`;
+}
+
+function downloadJSON() {
+    if (!lastResult) return;
+    const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (lastResult.metrics.file_name || 'report').replace(/\.[^.]+$/, '') + '_report.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function resetForm() {
+    selectedFile = null;
+    lastResult = null;
+    document.getElementById('fileName').textContent = '';
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('uploadCard').style.display = 'block';
+}
+</script>
+</body>
+</html>
