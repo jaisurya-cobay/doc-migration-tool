@@ -1,9 +1,10 @@
-"""AI-driven document analysis using Google Gemini (default) or Anthropic Claude."""
+"""AI-driven document analysis using Google Gemini."""
 
 import json
 import logging
 import os
 import re
+import time
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -68,6 +69,10 @@ Max heading depth: {max_heading_depth}
 {text_sample}
 """
 
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+MAX_RETRIES = 3
+RETRY_DELAY_SEC = 5
+
 
 def _build_prompt(metrics: dict, full_text: str) -> str:
     """Format the analysis prompt with document metrics and a content sample."""
@@ -107,15 +112,24 @@ def _parse_json_response(raw: str) -> dict:
     return json.loads(raw)
 
 
-# -- Gemini (default) ---------------------------------------------------------
+def analyze_document(
+    metrics: dict,
+    full_text: str,
+    api_key: Optional[str] = None,
+) -> AIAnalysis:
+    """Analyse a document for migration readiness using Google Gemini.
 
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
-MAX_RETRIES = 3
-RETRY_DELAY_SEC = 5
+    Automatically retries on rate-limit (429) or overload (503) errors,
+    and falls back through available Gemini models.
 
+    Args:
+        metrics:   Output of ``extract_metrics()``.
+        full_text: Full document text.
+        api_key:   API key override (falls back to GEMINI_API_KEY / GOOGLE_API_KEY env vars).
 
-def _analyze_with_gemini(metrics: dict, full_text: str, api_key: Optional[str]) -> AIAnalysis:
-    """Run analysis using Google Gemini with automatic model fallback and retry."""
+    Returns:
+        An ``AIAnalysis`` instance with structured results.
+    """
     try:
         from google import genai
         from google.genai import types
@@ -157,81 +171,11 @@ def _analyze_with_gemini(metrics: dict, full_text: str, api_key: Optional[str]) 
                 # Retry on 429 (rate limit) or 503 (overloaded)
                 if "429" in err_str or "503" in err_str:
                     if attempt < MAX_RETRIES:
-                        import time
                         time.sleep(RETRY_DELAY_SEC * attempt)
                         continue
-                    # Exhausted retries for this model — try next model
                     logger.info("        %s exhausted retries, trying next model...", model_name)
                     break
                 else:
-                    raise  # Non-retryable error, raise immediately
+                    raise
 
     raise last_error  # type: ignore[misc]
-
-
-# -- Claude (optional) --------------------------------------------------------
-
-def _analyze_with_claude(metrics: dict, full_text: str, api_key: Optional[str]) -> AIAnalysis:
-    """Run analysis using Anthropic Claude Opus 4.6."""
-    try:
-        import anthropic
-    except ImportError:
-        raise ImportError(
-            "anthropic is not installed. Run: pip install anthropic"
-        )
-
-    client = anthropic.Anthropic(
-        api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
-    )
-    prompt = _build_prompt(metrics, full_text)
-
-    response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=2048,
-        thinking={"type": "adaptive"},
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw_json = next(
-        (block.text for block in response.content if block.type == "text"), ""
-    )
-    data = _parse_json_response(raw_json)
-    return AIAnalysis(**data)
-
-
-# -- Public API ---------------------------------------------------------------
-
-_PROVIDERS = {
-    "gemini": _analyze_with_gemini,
-    "claude": _analyze_with_claude,
-}
-
-
-def analyze_document(
-    metrics: dict,
-    full_text: str,
-    provider: str = "gemini",
-    api_key: Optional[str] = None,
-) -> AIAnalysis:
-    """Analyse a document for migration readiness using the chosen AI provider.
-
-    Args:
-        metrics:   Output of ``extract_metrics()``.
-        full_text: Full document text.
-        provider:  ``"gemini"`` (default) or ``"claude"``.
-        api_key:   API key override (falls back to env vars).
-
-    Returns:
-        An ``AIAnalysis`` instance with structured results.
-
-    Raises:
-        ValueError: If the provider name is unknown.
-    """
-    provider = provider.lower().strip()
-    handler = _PROVIDERS.get(provider)
-    if handler is None:
-        raise ValueError(
-            f"Unknown provider '{provider}'. Choose from: {', '.join(_PROVIDERS)}"
-        )
-    return handler(metrics, full_text, api_key)

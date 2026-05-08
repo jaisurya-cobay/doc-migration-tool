@@ -72,8 +72,7 @@ python main.py report.pdf --json-only
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output-dir DIR` | `./output` | Directory for saved report files |
-| `--provider NAME` | `gemini` | AI provider: `gemini` or `claude` |
-| `--api-key KEY` | env var | API key for the chosen provider |
+| `--api-key KEY` | env var | Gemini API key |
 | `--no-ai` | off | Skip AI analysis (metrics only) |
 | `--json-only` | off | Print JSON to stdout |
 
@@ -188,6 +187,6 @@ doc-migration-tool/
     |-- __init__.py
     |-- parsers.py       # .docx and .pdf document parsing
     |-- metrics.py       # Structural & content metric extraction
-    |-- ai_analyzer.py   # Google Gemini AI integration (+ optional Claude)
+    |-- ai_analyzer.py   # Google Gemini AI integration
     |-- reporter.py      # JSON + Markdown report generation
 ```

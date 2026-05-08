@@ -20,16 +20,6 @@ from src.parsers import parse_document
 from src.metrics import extract_metrics
 from src.reporter import build_report, render_markdown, save_reports
 
-PROVIDERS = ("gemini", "claude")
-ENV_KEYS = {
-    "gemini": "GEMINI_API_KEY",
-    "claude": "ANTHROPIC_API_KEY",
-}
-MODEL_LABELS = {
-    "gemini": "Gemini 2.5 Flash",
-    "claude": "Claude Opus 4.6",
-}
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -37,23 +27,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _resolve_api_key(provider: str, cli_key: str | None) -> str | None:
-    """Resolve API key from CLI flag or environment variable."""
-    if cli_key:
-        return cli_key
-    primary = ENV_KEYS[provider]
-    key = os.environ.get(primary)
-    if key:
-        return key
-    # Gemini also accepts GOOGLE_API_KEY as fallback
-    if provider == "gemini":
-        return os.environ.get("GOOGLE_API_KEY")
-    return None
+def _resolve_api_key(cli_key: str | None) -> str | None:
+    """Resolve Gemini API key from CLI flag or environment variable."""
+    return cli_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
 
 def process_file(
     file_path: str,
-    provider: str,
     api_key: str | None,
     output_dir: str,
     no_ai: bool,
@@ -82,13 +62,11 @@ def process_file(
     # 3. AI analysis
     ai_result = None
     if not no_ai:
-        logger.info("  [3/3] Running AI analysis (%s)...", MODEL_LABELS[provider])
+        logger.info("  [3/3] Running AI analysis (Google Gemini)...")
         try:
             from src.ai_analyzer import analyze_document
 
-            ai_result = analyze_document(
-                metrics, parsed["text"], provider=provider, api_key=api_key
-            )
+            ai_result = analyze_document(metrics, parsed["text"], api_key=api_key)
             logger.info(
                 "        Readability      : %s (%s/10)",
                 ai_result.readability_level,
@@ -127,14 +105,7 @@ def main() -> None:
 Examples:
   python main.py report.pdf
   python main.py spec.docx summary.pdf --output-dir ./results
-
-  # Use Gemini (default) -- needs GEMINI_API_KEY
   python main.py report.pdf --api-key AIza...
-
-  # Use Claude instead -- needs ANTHROPIC_API_KEY
-  python main.py report.pdf --provider claude --api-key sk-ant-...
-
-  # Metrics only, no AI
   python main.py report.pdf --no-ai
 """,
     )
@@ -145,15 +116,9 @@ Examples:
         help="Directory for saved reports (default: ./output)",
     )
     parser.add_argument(
-        "--provider",
-        default="gemini",
-        choices=PROVIDERS,
-        help="AI provider: gemini (default) or claude",
-    )
-    parser.add_argument(
         "--api-key",
         default=None,
-        help="API key for the chosen provider (falls back to GEMINI_API_KEY / ANTHROPIC_API_KEY env var)",
+        help="Gemini API key (falls back to GEMINI_API_KEY env var)",
     )
     parser.add_argument(
         "--no-ai",
@@ -167,14 +132,12 @@ Examples:
     )
     args = parser.parse_args()
 
-    api_key = _resolve_api_key(args.provider, args.api_key)
+    api_key = _resolve_api_key(args.api_key)
 
     if not args.no_ai and not api_key:
-        env_var = ENV_KEYS[args.provider]
         logger.warning(
-            "WARNING: %s not set and --api-key not provided.\n"
+            "WARNING: GEMINI_API_KEY not set and --api-key not provided.\n"
             "         AI analysis will be skipped. Use --no-ai to suppress this warning.\n",
-            env_var,
         )
         args.no_ai = True
 
@@ -185,7 +148,6 @@ Examples:
         try:
             report = process_file(
                 file_path,
-                provider=args.provider,
                 api_key=api_key,
                 output_dir=args.output_dir,
                 no_ai=args.no_ai,
