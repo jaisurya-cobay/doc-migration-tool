@@ -596,22 +596,16 @@
 
         <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
             <div class="drop-icon">&#128196;</div>
-            <h3>Drag & drop your file here</h3>
-            <p class="sub">or click to browse</p>
+            <h3>Drag & drop your files here</h3>
+            <p class="sub">or click to browse (multiple files supported)</p>
             <div class="formats">
                 <span class="format-badge">PDF</span>
                 <span class="format-badge">DOCX</span>
             </div>
         </div>
-        <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+        <input type="file" id="fileInput" accept=".pdf,.docx" multiple hidden>
 
-        <div class="file-selected" id="fileSelected">
-            <span style="font-size:20px">&#128196;</span>
-            <div>
-                <div class="name" id="fileName"></div>
-                <div class="size" id="fileSize"></div>
-            </div>
-        </div>
+        <div id="fileList" style="margin-top:14px"></div>
 
         <div class="form-row">
             <div class="field">
@@ -643,47 +637,23 @@
     <!-- ── Results ── -->
     <div class="results" id="results">
 
-        <!-- Readiness Banner -->
-        <div class="readiness-banner no-ai" id="readinessBanner">
+        <!-- Overview Banner -->
+        <div class="readiness-banner no-ai" id="overviewBanner">
             <h2 id="bannerTitle">Analysis Complete</h2>
-            <p id="bannerSub">Document metrics extracted successfully</p>
+            <p id="bannerSub"></p>
         </div>
 
-        <!-- Metrics -->
-        <div class="card">
-            <h2><span class="icon">&#128202;</span> Document Metrics</h2>
-            <div class="metrics-grid" id="metricsGrid"></div>
-        </div>
-
-        <!-- AI Analysis -->
-        <div class="card" id="aiCard" style="display:none">
-            <h2><span class="icon">&#129302;</span> AI Analysis</h2>
-            <div class="scores-row" id="scoresRow"></div>
-            <div class="clarity-text" id="clarityText"></div>
-            <div class="ai-section" id="strengthsSection"></div>
-            <div class="ai-section" id="issuesSection"></div>
-            <div class="ai-section" id="suggestionsSection"></div>
-            <div class="ai-section">
-                <h3>Overall Summary</h3>
-                <div class="summary-text" id="summaryText"></div>
-            </div>
-        </div>
-
-        <!-- Summary Report -->
-        <div class="card" id="summaryReportCard" style="display:none">
-            <h2><span class="icon">&#128203;</span> Full Summary Report</h2>
-            <div class="saved-files" id="savedFiles"></div>
-            <div class="summary-report-box" id="summaryReportBox"></div>
-        </div>
+        <!-- Per-file results rendered here -->
+        <div id="fileResults"></div>
 
         <!-- Actions -->
         <div class="card" style="text-align: center;">
-            <h2 style="justify-content:center"><span class="icon">&#128229;</span> Export Reports</h2>
+            <h2 style="justify-content:center"><span class="icon">&#128229;</span> Export All Reports</h2>
             <div class="btn-row">
-                <button class="btn btn-download" onclick="downloadJSON()">&#128196; Download JSON</button>
-                <button class="btn btn-md" onclick="downloadMarkdown()">&#128221; Download Markdown</button>
+                <button class="btn btn-download" onclick="downloadAllJSON()">&#128196; Download All JSON</button>
+                <button class="btn btn-md" onclick="downloadAllMarkdown()">&#128221; Download All Markdown</button>
             </div>
-            <button class="btn btn-reset" onclick="resetForm()">&#8634; Analyse Another Document</button>
+            <button class="btn btn-reset" onclick="resetForm()">&#8634; Analyse More Documents</button>
         </div>
     </div>
 </div>
@@ -693,44 +663,62 @@
 </div>
 
 <script>
-let selectedFile = null;
-let lastResult = null;
+let selectedFiles = [];
+let lastData = null;
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 
-['dragenter', 'dragover'].forEach(e => {
-    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); });
-});
-['dragleave', 'drop'].forEach(e => {
-    dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); });
-});
-dropZone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]); });
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) selectFile(fileInput.files[0]); });
+['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); }));
+dropZone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', () => addFiles(fileInput.files));
 
-function selectFile(file) {
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!['pdf', 'docx'].includes(ext)) { showError('Only .pdf and .docx files are supported.'); return; }
-    selectedFile = file;
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
-    document.getElementById('fileSelected').style.display = 'flex';
-    document.getElementById('analyzeBtn').disabled = false;
+function addFiles(fileList) {
     hideError();
+    for (const f of fileList) {
+        const ext = f.name.split('.').pop().toLowerCase();
+        if (['pdf','docx'].includes(ext) && !selectedFiles.find(s => s.name === f.name)) {
+            selectedFiles.push(f);
+        }
+    }
+    renderFileList();
+    document.getElementById('analyzeBtn').disabled = selectedFiles.length === 0;
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderFileList();
+    document.getElementById('analyzeBtn').disabled = selectedFiles.length === 0;
+}
+
+function renderFileList() {
+    const el = document.getElementById('fileList');
+    if (!selectedFiles.length) { el.innerHTML = ''; return; }
+    el.innerHTML = selectedFiles.map((f, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:8px;margin-bottom:6px">
+            <span style="font-size:18px">${f.name.endsWith('.pdf') ? '&#128211;' : '&#128196;'}</span>
+            <div style="flex:1">
+                <div style="color:#a5b4fc;font-weight:600;font-size:13px">${f.name}</div>
+                <div style="color:#6366f1;font-size:11px">${(f.size/1024).toFixed(1)} KB</div>
+            </div>
+            <button onclick="removeFile(${i})" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;padding:4px">&times;</button>
+        </div>
+    `).join('');
 }
 
 function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.style.display = 'block'; }
 function hideError() { document.getElementById('errorMsg').style.display = 'none'; }
 
 async function analyzeFile() {
-    if (!selectedFile) return;
+    if (!selectedFiles.length) return;
     hideError();
     document.getElementById('uploadCard').style.display = 'none';
     document.getElementById('loading').style.display = 'block';
     document.getElementById('results').style.display = 'none';
 
     const formData = new FormData();
-    formData.append('file', selectedFile);
+    selectedFiles.forEach(f => formData.append('file', f));
     formData.append('api_key', document.getElementById('apiKey').value);
     formData.append('skip_ai', document.getElementById('skipAi').checked ? 'true' : 'false');
 
@@ -743,8 +731,8 @@ async function analyzeFile() {
             document.getElementById('loading').style.display = 'none';
             return;
         }
-        lastResult = data;
-        renderResults(data);
+        lastData = data;
+        renderAllResults(data);
     } catch (err) {
         showError('Request failed: ' + err.message);
         document.getElementById('uploadCard').style.display = 'block';
@@ -752,34 +740,39 @@ async function analyzeFile() {
     document.getElementById('loading').style.display = 'none';
 }
 
-function renderResults(data) {
-    const m = data.metrics;
-    const ai = data.ai_analysis;
+function scoreColor(s) { return s >= 7 ? '#10b981' : s >= 4 ? '#f59e0b' : '#ef4444'; }
+function tagCls(val) {
+    if (['Ready','Well-Organized','Easy','Low'].includes(val)) return 'tag-green';
+    if (['Fragmented','Complex','Requires Restructuring','High'].includes(val)) return 'tag-red';
+    return 'tag-yellow';
+}
 
-    // Banner
-    const banner = document.getElementById('readinessBanner');
-    if (ai && !ai.error) {
-        const status = ai.migration_readiness;
-        if (status === 'Ready') {
-            banner.className = 'readiness-banner ready';
-            document.getElementById('bannerTitle').textContent = 'Ready for Migration';
-            document.getElementById('bannerSub').textContent = 'This document is clean and well-structured for migration.';
-        } else if (status === 'Requires Restructuring') {
-            banner.className = 'readiness-banner restructure';
-            document.getElementById('bannerTitle').textContent = 'Requires Restructuring';
-            document.getElementById('bannerSub').textContent = 'Significant changes needed before migration.';
-        } else {
-            banner.className = 'readiness-banner cleanup';
-            document.getElementById('bannerTitle').textContent = 'Needs Minor Cleanup';
-            document.getElementById('bannerSub').textContent = 'Small improvements recommended before migration.';
+function renderAllResults(data) {
+    // Overview banner
+    const banner = document.getElementById('overviewBanner');
+    banner.className = 'readiness-banner ' + (data.failed > 0 ? 'cleanup' : 'ready');
+    document.getElementById('bannerTitle').textContent = `${data.succeeded} of ${data.total} Documents Analysed`;
+    document.getElementById('bannerSub').textContent = data.failed > 0
+        ? `${data.failed} file(s) failed. Reports saved to ./output/`
+        : `All reports saved to ./output/`;
+
+    // Render each file result
+    const container = document.getElementById('fileResults');
+    container.innerHTML = '';
+    data.results.forEach((r, idx) => {
+        if (!r.success) {
+            container.innerHTML += `<div class="card"><h2 style="color:#f87171">&#10060; ${r.file_name}</h2><p style="color:#94a3b8">${r.error}</p></div>`;
+            return;
         }
-    } else {
-        banner.className = 'readiness-banner no-ai';
-        document.getElementById('bannerTitle').textContent = 'Metrics Extracted';
-        document.getElementById('bannerSub').textContent = ai && ai.error ? 'AI analysis failed: ' + ai.error : 'AI analysis was skipped.';
-    }
+        container.innerHTML += renderSingleResult(r, idx);
+    });
 
-    // Metrics
+    document.getElementById('results').style.display = 'block';
+}
+
+function renderSingleResult(r, idx) {
+    const m = r.metrics;
+    const ai = r.ai_analysis;
     const metricsMap = [
         ['File Type', m.file_type.toUpperCase()],
         ['Pages', m.page_count + (m.is_page_count_estimated ? ' (est.)' : '')],
@@ -794,103 +787,81 @@ function renderResults(data) {
         ['Images', m.image_count],
         ['Reading Time', m.estimated_reading_time_min + ' min'],
     ];
-    document.getElementById('metricsGrid').innerHTML = metricsMap.map(([label, value]) =>
-        `<div class="metric-item"><div class="label">${label}</div><div class="value">${value}</div></div>`
-    ).join('');
 
-    // AI
-    const aiCard = document.getElementById('aiCard');
-    if (ai && !ai.error) {
-        aiCard.style.display = 'block';
+    let html = `<div class="card"><h2><span class="icon">&#128196;</span> ${m.file_name}</h2>`;
 
-        function scoreColor(s) { return s >= 7 ? '#10b981' : s >= 4 ? '#f59e0b' : '#ef4444'; }
-        function tagCls(val) {
-            if (['Ready', 'Well-Organized', 'Easy', 'Low'].includes(val)) return 'tag-green';
-            if (['Fragmented', 'Complex', 'Requires Restructuring', 'High'].includes(val)) return 'tag-red';
-            return 'tag-yellow';
-        }
-
-        document.getElementById('scoresRow').innerHTML = `
-            <div class="score-card">
-                <div class="score-ring" style="background:radial-gradient(circle,#0a101f 60%,${scoreColor(ai.readability_score)}22 100%);border:3px solid ${scoreColor(ai.readability_score)}">
-                    <div><span class="number" style="color:${scoreColor(ai.readability_score)}">${ai.readability_score}</span><span class="out-of">/10</span></div>
-                </div>
-                <div class="label">Readability</div>
-                <span class="tag ${tagCls(ai.readability_level)}">${ai.readability_level}</span>
-            </div>
-            <div class="score-card">
-                <div class="score-ring" style="background:radial-gradient(circle,#0a101f 60%,${scoreColor(ai.migration_score)}22 100%);border:3px solid ${scoreColor(ai.migration_score)}">
-                    <div><span class="number" style="color:${scoreColor(ai.migration_score)}">${ai.migration_score}</span><span class="out-of">/10</span></div>
-                </div>
-                <div class="label">Migration Score</div>
-                <span class="tag ${tagCls(ai.migration_readiness)}">${ai.migration_readiness}</span>
-            </div>
-            <div class="score-card">
-                <div style="margin-bottom:10px">
-                    <div class="label">Structure</div>
-                    <span class="tag ${tagCls(ai.structural_quality)}" style="margin-top:6px">${ai.structural_quality}</span>
-                </div>
-                <div>
-                    <div class="label">Effort</div>
-                    <span class="tag ${tagCls(ai.estimated_migration_effort)}" style="margin-top:6px">${ai.estimated_migration_effort}</span>
-                </div>
-            </div>`;
-
-        document.getElementById('clarityText').textContent = ai.content_clarity;
-        renderList('strengthsSection', 'Strengths', ai.strengths, 'strength');
-        renderList('issuesSection', 'Issues Found', ai.issues, 'issue');
-        renderList('suggestionsSection', 'Suggestions', ai.suggestions, 'suggest');
-        document.getElementById('summaryText').textContent = ai.summary;
-    } else {
-        aiCard.style.display = 'none';
+    // Saved files
+    if (r.saved_files) {
+        html += `<div class="saved-files" style="margin-bottom:16px"><strong>Saved:</strong> ${r.saved_files.json} | ${r.saved_files.markdown}</div>`;
     }
 
-    // Summary report
-    const summaryCard = document.getElementById('summaryReportCard');
-    if (data.summary_report) {
-        summaryCard.style.display = 'block';
-        document.getElementById('summaryReportBox').textContent = data.summary_report;
-        if (data.saved_files) {
-            document.getElementById('savedFiles').innerHTML =
-                '<strong>Reports auto-saved:</strong><br>' +
-                'JSON &rarr; ' + data.saved_files.json + '<br>' +
-                'Markdown &rarr; ' + data.saved_files.markdown;
-        }
-    } else { summaryCard.style.display = 'none'; }
+    // Metrics grid
+    html += `<div class="metrics-grid">${metricsMap.map(([l,v]) =>
+        `<div class="metric-item"><div class="label">${l}</div><div class="value">${v}</div></div>`
+    ).join('')}</div>`;
 
-    document.getElementById('results').style.display = 'block';
+    // AI Analysis
+    if (ai && !ai.error) {
+        html += `
+        <div style="margin-top:22px">
+            <h2><span class="icon">&#129302;</span> AI Analysis</h2>
+            <div class="scores-row">
+                <div class="score-card">
+                    <div class="score-ring" style="background:radial-gradient(circle,#0a101f 60%,${scoreColor(ai.readability_score)}22 100%);border:3px solid ${scoreColor(ai.readability_score)}">
+                        <div><span class="number" style="color:${scoreColor(ai.readability_score)}">${ai.readability_score}</span><span class="out-of">/10</span></div>
+                    </div>
+                    <div class="label">Readability</div>
+                    <span class="tag ${tagCls(ai.readability_level)}">${ai.readability_level}</span>
+                </div>
+                <div class="score-card">
+                    <div class="score-ring" style="background:radial-gradient(circle,#0a101f 60%,${scoreColor(ai.migration_score)}22 100%);border:3px solid ${scoreColor(ai.migration_score)}">
+                        <div><span class="number" style="color:${scoreColor(ai.migration_score)}">${ai.migration_score}</span><span class="out-of">/10</span></div>
+                    </div>
+                    <div class="label">Migration Score</div>
+                    <span class="tag ${tagCls(ai.migration_readiness)}">${ai.migration_readiness}</span>
+                </div>
+                <div class="score-card">
+                    <div style="margin-bottom:10px"><div class="label">Structure</div><span class="tag ${tagCls(ai.structural_quality)}" style="margin-top:6px">${ai.structural_quality}</span></div>
+                    <div><div class="label">Effort</div><span class="tag ${tagCls(ai.estimated_migration_effort)}" style="margin-top:6px">${ai.estimated_migration_effort}</span></div>
+                </div>
+            </div>
+            <div class="clarity-text">${ai.content_clarity}</div>`;
+
+        if (ai.strengths && ai.strengths.length) html += `<div class="ai-section"><h3>Strengths</h3><ul>${ai.strengths.map(s=>`<li class="strength">${s}</li>`).join('')}</ul></div>`;
+        if (ai.issues && ai.issues.length) html += `<div class="ai-section"><h3>Issues Found</h3><ul>${ai.issues.map(s=>`<li class="issue">${s}</li>`).join('')}</ul></div>`;
+        if (ai.suggestions && ai.suggestions.length) html += `<div class="ai-section"><h3>Suggestions</h3><ul>${ai.suggestions.map(s=>`<li class="suggest">${s}</li>`).join('')}</ul></div>`;
+        html += `<div class="ai-section"><h3>Summary</h3><div class="summary-text">${ai.summary}</div></div>`;
+        html += `</div>`;
+    } else if (ai && ai.error) {
+        html += `<p style="color:#f87171;margin-top:14px">AI analysis failed: ${ai.error}</p>`;
+    }
+
+    html += `</div>`;
+    return html;
 }
 
-function renderList(id, title, items, cls) {
-    const el = document.getElementById(id);
-    if (!items || !items.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<h3>${title}</h3><ul>${items.map(i => `<li class="${cls}">${i}</li>`).join('')}</ul>`;
-}
-
-function downloadJSON() {
-    if (!lastResult) return;
-    const blob = new Blob([JSON.stringify(lastResult, null, 2)], {type: 'application/json'});
+function downloadAllJSON() {
+    if (!lastData) return;
+    const blob = new Blob([JSON.stringify(lastData, null, 2)], {type:'application/json'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = (lastResult.metrics.file_name || 'report').replace(/\.[^.]+$/, '') + '_report.json';
-    a.click();
+    a.download = 'migration_analysis_report.json'; a.click();
 }
 
-function downloadMarkdown() {
-    if (!lastResult || !lastResult.summary_report) return;
-    const blob = new Blob([lastResult.summary_report], {type: 'text/markdown'});
+function downloadAllMarkdown() {
+    if (!lastData) return;
+    const md = lastData.results.filter(r => r.summary_report).map(r => r.summary_report).join('\n\n---\n\n');
+    const blob = new Blob([md], {type:'text/markdown'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = (lastResult.metrics.file_name || 'report').replace(/\.[^.]+$/, '') + '_report.md';
-    a.click();
+    a.download = 'migration_analysis_report.md'; a.click();
 }
 
 function resetForm() {
-    selectedFile = null; lastResult = null;
-    document.getElementById('fileName').textContent = '';
-    document.getElementById('fileSize').textContent = '';
-    document.getElementById('fileSelected').style.display = 'none';
+    selectedFiles = []; lastData = null;
+    document.getElementById('fileList').innerHTML = '';
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('fileInput').value = '';
     document.getElementById('results').style.display = 'none';
+    document.getElementById('fileResults').innerHTML = '';
     document.getElementById('uploadCard').style.display = 'block';
 }
 </script>
