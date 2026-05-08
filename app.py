@@ -5,15 +5,17 @@ import os
 import tempfile
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 
 from src.parsers import parse_document
 from src.metrics import extract_metrics
 from src.ai_analyzer import analyze_document
+from src.reporter import build_report, render_markdown, save_reports
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB max upload
 
+OUTPUT_DIR = "./output"
 ALLOWED_EXTENSIONS = {"pdf", "docx"}
 
 
@@ -58,6 +60,7 @@ def analyze():
         metrics["file_name"] = file.filename  # Use original name
 
         # 3. AI Analysis
+        ai_result = None
         ai_data = None
         if not skip_ai and (api_key or env_key):
             try:
@@ -66,10 +69,20 @@ def analyze():
             except Exception as e:
                 ai_data = {"error": str(e)}
 
+        # 4. Build report and save to ./output/
+        report = build_report(metrics, ai_result)
+        markdown_summary = render_markdown(report)
+        json_path, md_path = save_reports(report, OUTPUT_DIR)
+
         return jsonify({
             "success": True,
             "metrics": metrics,
             "ai_analysis": ai_data,
+            "summary_report": markdown_summary,
+            "saved_files": {
+                "json": json_path,
+                "markdown": md_path,
+            },
         })
 
     except Exception as e:
@@ -77,6 +90,23 @@ def analyze():
 
     finally:
         os.unlink(tmp_path)
+
+
+@app.route("/download/<file_type>/<filename>")
+def download_report(file_type, filename):
+    """Download a saved report file."""
+    safe_name = Path(filename).name  # Prevent path traversal
+    if file_type == "json":
+        path = os.path.join(OUTPUT_DIR, safe_name)
+    elif file_type == "md":
+        path = os.path.join(OUTPUT_DIR, safe_name)
+    else:
+        return "Invalid file type", 400
+
+    if not os.path.exists(path):
+        return "File not found", 404
+
+    return send_file(path, as_attachment=True)
 
 
 if __name__ == "__main__":
